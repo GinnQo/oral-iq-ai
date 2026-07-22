@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  TEACHER
+  ADMIN
+}
+
+enum AssessmentStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String?
+  image           String?
+  googleAccountId String?  @unique
+  role            UserRole @default(TEACHER)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  assessments       Assessment[]
+  classrooms        Classroom[]
+  students          Student[]
+  assessmentResults AssessmentResult[]
+
+  @@map("users")
+}
+
+model Assessment {
+  id            String           @id @default(cuid())
+  userId        String
+  title         String
+  activityType  String?
+  grade         String?
+  duration      String?
+  skillFocus    String?
+  rubric        String?
+  presenterType String?
+  status        AssessmentStatus @default(DRAFT)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  user    User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  results AssessmentResult[]
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([status])
+  @@map("assessments")
+}
+
+model Classroom {
+  id             String    @id @default(cuid())
+  userId         String
+  googleCourseId String
+  name           String
+  section        String?
+  room           String?
+  description    String?
+  courseState    String?
+  active         Boolean   @default(true)
+  lastSyncedAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  enrollments ClassroomStudent[]
+
+  @@unique([userId, googleCourseId])
+  @@index([userId])
+  @@index([googleCourseId])
+  @@index([active])
+  @@map("classrooms")
+}
+
+model Student {
+  id              String   @id @default(cuid())
+  userId          String
+  googleStudentId String
+  name            String
+  email           String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  enrollments ClassroomStudent[]
+
+  @@unique([userId, googleStudentId])
+  @@index([userId])
+  @@index([googleStudentId])
+  @@index([email])
+  @@index([active])
+  @@map("students")
+}
+
+model ClassroomStudent {
+  id          String           @id @default(cuid())
+  classroomId String
+  studentId   String
+  status      EnrollmentStatus @default(ACTIVE)
+  importedAt  DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  classroom Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([classroomId, studentId])
+  @@index([classroomId])
+  @@index([studentId])
+  @@index([status])
+  @@map("classroom_students")
+}
+
+model AssessmentResult {
+  id                String   @id @default(cuid())
+  userId            String
+  assessmentId      String?
+  presentationType  String
+  title             String?
+  grade             String?
+  rubric            String?
+  topic             String?
+  transcript        String
+  duration          Float
+  aiScore           Float?
+  teacherFinalScore Float?
+  teacherReviewNote String?
+  studentNames      Json
+  segments          Json
+  detectedSpeakers  Json
+  speakerMappings   Json
+  speakerStatistics Json
+  overlapWarnings   Json
+  warnings          Json
+  groupAssessment   Json
+  individualResults Json
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  assessment Assessment? @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([assessmentId])
+  @@index([createdAt])
+  @@index([teacherFinalScore])
+  @@map("assessment_results")
+}

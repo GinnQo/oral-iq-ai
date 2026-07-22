@@ -1,0 +1,213 @@
+========================================
+ORALIQ AI CURRENT STATUS AUDIT
+========================================
+
+1. CURRENT GIT STATUS
+----------------------------------------
+ M app/assessments/page.tsx
+ M app/layout.tsx
+ M app/page.tsx
+ M package-lock.json
+ M package.json
+?? .github/
+?? ARCHITECTURE_DIAGRAM.md
+?? AUDIT_QUICK_REFERENCE.md
+?? CODEBASE_AUDIT_REPORT.md
+?? COMMERCIAL_READINESS_ASSESSMENT.md
+?? DEPLOYMENT.md
+?? MILESTONE_2A_DATABASE_FOUNDATION.md
+?? ORALIQ_AI_ARCHITECTURAL_AUDIT.md
+?? ORALIQ_CURRENT_STATUS_AUDIT.txt
+?? PHASE_1_IMPLEMENTATION_REPORT.md
+?? PHASE_1_QUICK_START.md
+?? PHASE_1_README.md
+?? PHASE_1_SUMMARY.md
+?? PIPELINE_CONNECTION_GUIDE.md
+?? PRESENTATION_GRADER_IMPLEMENTATION_REPORT.md
+?? PRESENTATION_GRADER_QUICK_START.md
+?? PRESENTATION_GRADER_TESTING_GUIDE.md
+?? app/api/
+?? app/classes/
+?? app/library/
+?? app/presentation-grader/
+?? app/settings/
+?? components/
+?? docker-compose.yml
+?? lib/
+?? prisma/
+?? services/
+?? tmp
+
+2. APP PAGES
+----------------------------------------
+app/assessments/page.tsx
+app/classes/page.tsx
+app/feedback/page.tsx
+app/library/page.tsx
+app/page.tsx
+app/presentation-grader/page.tsx
+app/reports/page.tsx
+app/settings/page.tsx
+app/students/page.tsx
+
+3. API ROUTES
+----------------------------------------
+app/api/ai/feedback/route.ts
+app/api/ai/grading/route.ts
+app/api/ai/reports/route.ts
+app/api/ai/rubric/route.ts
+app/api/ai/rubric/save/route.ts
+app/api/assessments/[id]/route.ts
+app/api/assessments/route.ts
+app/api/auth/[...nextauth]/route.ts
+app/api/classroom/courses/route.ts
+app/api/classroom/import/route.ts
+app/api/classroom/students/route.ts
+app/api/grade-presentation/route.ts
+app/api/results/route.ts
+app/api/speaker/[...path]/route.ts
+app/api/speech/analyze/route.ts
+app/api/speech/transcribe/route.ts
+
+4. PRISMA MODELS
+----------------------------------------
+26:model User {
+44:model Assessment {
+67:model Classroom {
+91:model Student {
+112:model ClassroomStudent {
+130:model AssessmentResult {
+
+5. DATABASE MIGRATIONS
+----------------------------------------
+prisma/migrations/20260714032112_init_main_app/migration.sql
+prisma/migrations/20260714144310_add_classrooms_students/migration.sql
+prisma/migrations/20260714155414_add_assessment_results/migration.sql
+
+6. REMAINING LOCAL STORAGE
+----------------------------------------
+
+7. OPENAI API USAGE
+----------------------------------------
+app/api/grade-presentation/route.ts:10:const openai = new OpenAI({
+app/api/grade-presentation/route.ts:11:  apiKey: process.env.OPENAI_API_KEY,
+app/api/grade-presentation/route.ts:707:      await openai.audio.transcriptions.create({
+app/api/grade-presentation/route.ts:1972:      await openai.chat.completions.create({
+app/api/grade-presentation/route.ts:2121:      !process.env.OPENAI_API_KEY
+app/api/grade-presentation/route.ts:2126:            "OPENAI_API_KEY is missing from .env.local.",
+services/speaker-recognition/.env.example:10:OPENAI_API_KEY=your-openai-api-key
+
+8. GOOGLE CLASSROOM CONNECTIONS
+----------------------------------------
+app/api/classroom/students/route.ts:25:    `https://classroom.googleapis.com/v1/courses/${courseId}/students`,
+app/api/classroom/courses/route.ts:12:    "https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE",
+components/ClassroomProvider.tsx:173:        "/api/classroom/import",
+components/ClassroomProvider.tsx:238:        "/api/classroom/courses"
+components/ClassroomProvider.tsx:296:          `/api/classroom/students?courseId=${encodeURIComponent(
+components/ClassroomProvider.tsx:327:          "/api/classroom/import",
+components/ClassroomProvider.tsx:395:          "/api/classroom/import",
+
+9. RESULTS CONNECTIONS
+----------------------------------------
+app/api/results/route.ts:98:      await prisma.assessmentResult.findMany({
+app/api/results/route.ts:237:      await prisma.assessmentResult.create({
+app/presentation-grader/page.tsx:1120:      const response = await fetch("/api/results", {
+
+10. PRESENTATION GRADER SAVE FUNCTION
+----------------------------------------
+123:  groupAssessment: GroupAssessment;
+236:  const [teacherFinalScore, setTeacherFinalScore] =
+301:        finalResult.groupAssessment.overallScore
+1052:            responseData.groupAssessment
+1086:  async function saveResults() {
+1108:        groupAssessment: finalResult.groupAssessment,
+1110:        teacherFinalScore: teacherFinalScore ?? finalResult.groupAssessment.overallScore,
+1730:              teacherFinalScore={teacherFinalScore}
+1756:                  teacherFinalScore:
+1757:                    teacherFinalScore ??
+1758:                    finalResult.groupAssessment.overallScore,
+2349:                result.groupAssessment
+2361:        assessment={result.groupAssessment}
+2400:  teacherFinalScore,
+2411:  teacherFinalScore: number | null;
+2454:            value={teacherFinalScore ?? ""}
+2501:          💾 Save Results
+2515:          Final group score: <strong>{teacherFinalScore ?? result.groupAssessment.overallScore}</strong> / 100
+
+11. REPORTS PAGE DATABASE CONNECTION
+----------------------------------------
+
+12. STUDENTS PAGE DATABASE CONNECTION
+----------------------------------------
+12:            Manage students and track speaking development.
+
+13. AUDIO STORAGE REFERENCES
+----------------------------------------
+app/presentation-grader/page.tsx:224:  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+app/presentation-grader/page.tsx:225:  const [audioUrl, setAudioUrl] = useState("");
+app/presentation-grader/page.tsx:250:  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+app/presentation-grader/page.tsx:252:  const audioChunksRef = useRef<Blob[]>([]);
+app/presentation-grader/page.tsx:288:      if (audioUrl) {
+app/presentation-grader/page.tsx:289:        URL.revokeObjectURL(audioUrl);
+app/presentation-grader/page.tsx:296:  }, [audioUrl]);
+app/presentation-grader/page.tsx:388:      setStatus(audioBlob ? "recorded" : "ready");
+app/presentation-grader/page.tsx:453:    if (audioUrl) {
+app/presentation-grader/page.tsx:454:      URL.revokeObjectURL(audioUrl);
+app/presentation-grader/page.tsx:457:    setAudioBlob(null);
+app/presentation-grader/page.tsx:501:  async function extractSegmentBlob(audio: Blob, startSec: number, endSec: number) {
+app/presentation-grader/page.tsx:522:      return new Blob([wavArrayBuffer], { type: "audio/wav" });
+app/presentation-grader/page.tsx:588:    if (!audioBlob) return;
+app/presentation-grader/page.tsx:595:      form.append("audio", new File([audioBlob], `enroll-${Date.now()}.webm`, { type: audioBlob.type }));
+app/presentation-grader/page.tsx:639:    if (typeof MediaRecorder === "undefined") {
+app/presentation-grader/page.tsx:669:          MediaRecorder.isTypeSupported(mimeType)
+app/presentation-grader/page.tsx:673:        ? new MediaRecorder(stream, {
+app/presentation-grader/page.tsx:676:        : new MediaRecorder(stream);
+app/presentation-grader/page.tsx:696:        const recordedAudio = new Blob(
+app/presentation-grader/page.tsx:719:        setAudioBlob(recordedAudio);
+app/presentation-grader/page.tsx:768:    if (!audioBlob) {
+app/presentation-grader/page.tsx:788:        audioSize: audioBlob.size,
+app/presentation-grader/page.tsx:789:        audioType: audioBlob.type,
+app/presentation-grader/page.tsx:798:      const audioExtension = audioBlob.type.includes("ogg")
+app/presentation-grader/page.tsx:803:        [audioBlob],
+app/presentation-grader/page.tsx:806:          type: audioBlob.type || "audio/webm",
+app/presentation-grader/page.tsx:1579:            {!isRecording && !audioBlob && (
+app/presentation-grader/page.tsx:1598:                        setAudioBlob(file);
+app/presentation-grader/page.tsx:1626:            {audioBlob &&
+app/presentation-grader/page.tsx:1652:            {audioBlob &&
+app/presentation-grader/page.tsx:1666:          {audioUrl && (
+app/presentation-grader/page.tsx:1674:                src={audioUrl}
+app/presentation-grader/page.tsx:1718:            audioBlob={audioBlob}
+app/presentation-grader/page.tsx:1763:                const blob = new Blob(
+app/presentation-grader/page.tsx:1814:  audioBlob,
+app/presentation-grader/page.tsx:1829:  audioBlob: Blob | null;
+app/presentation-grader/page.tsx:1840:    if (!audioBlob) return;
+app/presentation-grader/page.tsx:1845:      const audioExtension = audioBlob.type.includes("ogg")
+app/presentation-grader/page.tsx:1850:        [audioBlob],
+app/presentation-grader/page.tsx:1852:        { type: audioBlob.type || "audio/webm" }
+components/AudioRecorder.tsx:6:  onRecordingComplete: (blob: Blob, duration: number) => void;
+components/AudioRecorder.tsx:16:  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+components/AudioRecorder.tsx:18:  const audioChunksRef = useRef<Blob[]>([]);
+components/AudioRecorder.tsx:45:      const mediaRecorder = new MediaRecorder(stream, {
+components/AudioRecorder.tsx:57:        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+components/AudioRecorder.tsx:58:        onRecordingComplete(audioBlob, seconds);
+
+14. PLACEHOLDERS AND MOCK DATA
+----------------------------------------
+app/assessments/page.tsx:210:            placeholder="Assessment Title"
+app/presentation-grader/page.tsx:1282:                        placeholder={
+app/presentation-grader/page.tsx:1528:                placeholder="Example: Book presentation"
+app/presentation-grader/page.tsx:2464:            placeholder="Enter a final score"
+app/presentation-grader/page.tsx:2482:            placeholder="Add a final comment for this assessment"
+services/speaker-recognition/README.md:16:- `app/embeddings.py` contains a placeholder embedding function; replace with ECAPA-TDNN inference.
+.env.local:8:OPENAI_API_KEY=your_openai_api_key_heresk-proj-GsXO36kKrisc-7_pUEqJ-3s9rehv_z9NXxGIeA1kUeBm8l5BImkjWmOoHrakB6UGqU1D5p2ViVT3BlbkFJvWntNNcBJMEWKBkeDMbFra1hHnfKFonR6jtSrHAfS0Zo99edl2-GLiD0z3Q7w8i0sFOUJdtb0A
+
+15. DATABASE SERVICE
+----------------------------------------
+NAME      IMAGE     COMMAND   SERVICE   CREATED   STATUS    PORTS
+
+16. NEXT.JS PROCESS
+----------------------------------------
+
+========================================
+AUDIT COMPLETE
+========================================
