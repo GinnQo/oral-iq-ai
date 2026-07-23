@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSubscriptionAccess } from "@/lib/subscription-access";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -11,6 +12,15 @@ export async function GET(req: Request) {
   if (!accessToken) {
     return new Response(JSON.stringify({ error: "Not authenticated" }), {
       status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const access = await requireSubscriptionAccess();
+
+  if (!access?.canAccess) {
+    return new Response(JSON.stringify({ error: "Subscription required" }), {
+      status: 402,
       headers: { "Content-Type": "application/json" },
     });
   }

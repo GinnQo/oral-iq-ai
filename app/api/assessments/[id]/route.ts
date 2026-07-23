@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import prisma from "@/lib/prisma";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSubscriptionAccess } from "@/lib/subscription-access";
 
 export async function DELETE(
   request: Request,
@@ -13,6 +14,15 @@ export async function DELETE(
       return Response.json(
         { error: "Not authenticated" },
         { status: 401 }
+      );
+    }
+
+    const access = await requireSubscriptionAccess();
+
+    if (!access?.canAccess) {
+      return Response.json(
+        { error: "Subscription required" },
+        { status: 402 }
       );
     }
 

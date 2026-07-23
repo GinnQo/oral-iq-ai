@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import prisma from "@/lib/prisma";
+import { requireSubscriptionAccess } from "@/lib/subscription-access";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -84,6 +85,15 @@ export async function GET() {
       );
     }
 
+    const access = await requireSubscriptionAccess();
+
+    if (!access?.canAccess) {
+      return Response.json(
+        { error: "Subscription required" },
+        { status: 402 }
+      );
+    }
+
     const user = await prisma.user.findUnique({
       where: {
         email: session.user.email,
@@ -127,6 +137,15 @@ export async function POST(request: Request) {
       return Response.json(
         { error: "Not authenticated" },
         { status: 401 }
+      );
+    }
+
+    const access = await requireSubscriptionAccess();
+
+    if (!access?.canAccess) {
+      return Response.json(
+        { error: "Subscription required" },
+        { status: 402 }
       );
     }
 

@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import prisma from "@/lib/prisma";
+import { requireSubscriptionAccess } from "@/lib/subscription-access";
 
 type ImportedCourse = {
   id: string;
@@ -34,6 +35,12 @@ async function getCurrentUser() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
+    return null;
+  }
+
+  const access = await requireSubscriptionAccess();
+
+  if (!access?.canAccess) {
     return null;
   }
 

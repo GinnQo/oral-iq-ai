@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSubscriptionAccess } from "@/lib/subscription-access";
 import fs from "fs/promises";
 import path from "path";
 
@@ -22,6 +23,15 @@ async function writeStore(obj: any) {
 
 export async function GET(req: Request) {
   const session: any = await getServerSession(authOptions as any);
+  const access = await requireSubscriptionAccess();
+
+  if (!access?.canAccess) {
+    return new Response(JSON.stringify({ error: "Subscription required" }), {
+      status: 402,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const email = session?.user?.email || "anonymous";
 
   const store = await readStore();
@@ -35,6 +45,15 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const session: any = await getServerSession(authOptions as any);
+  const access = await requireSubscriptionAccess();
+
+  if (!access?.canAccess) {
+    return new Response(JSON.stringify({ error: "Subscription required" }), {
+      status: 402,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const email = session?.user?.email || "anonymous";
 
   try {

@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import prisma from "@/lib/prisma";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSubscriptionAccess } from "@/lib/subscription-access";
 
 export async function GET(request: Request) {
   try {
@@ -10,6 +11,15 @@ export async function GET(request: Request) {
       return Response.json(
         { error: "Not authenticated" },
         { status: 401 }
+      );
+    }
+
+    const access = await requireSubscriptionAccess();
+
+    if (!access?.canAccess) {
+      return Response.json(
+        { error: "Subscription required" },
+        { status: 402 }
       );
     }
 
@@ -55,6 +65,15 @@ export async function POST(request: Request) {
       return Response.json(
         { error: "Not authenticated" },
         { status: 401 }
+      );
+    }
+
+    const access = await requireSubscriptionAccess();
+
+    if (!access?.canAccess) {
+      return Response.json(
+        { error: "Subscription required" },
+        { status: 402 }
       );
     }
 

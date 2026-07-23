@@ -3,6 +3,7 @@ import {
   NextRequest,
   NextResponse,
 } from "next/server";
+import { requireSubscriptionAccess } from "@/lib/subscription-access";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -2126,6 +2127,17 @@ export async function POST(
             "OPENAI_API_KEY is missing from .env.local.",
         },
         { status: 500 }
+      );
+    }
+
+    const access = await requireSubscriptionAccess();
+
+    if (!access?.canAccess) {
+      return NextResponse.json(
+        {
+          error: "Subscription required",
+        },
+        { status: 402 }
       );
     }
 

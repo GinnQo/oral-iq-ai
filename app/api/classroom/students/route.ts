@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
+import { requireSubscriptionAccess } from "@/lib/subscription-access";
 
 type ClassroomProfile = {
   id?: string;
@@ -54,6 +55,15 @@ export async function GET(request: Request) {
             "Not signed in with Google. Please sign out and sign in again.",
         },
         401
+      );
+    }
+
+    const access = await requireSubscriptionAccess();
+
+    if (!access?.canAccess) {
+      return jsonResponse(
+        { error: "Subscription required" },
+        402
       );
     }
 

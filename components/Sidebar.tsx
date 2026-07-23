@@ -1,7 +1,10 @@
 import Link from "next/link";
 
 const menuItems = [
-  { name: "Dashboard", href: "/", icon: "🏠" },
+  { name: "Dashboard", href: "/teacher", icon: "🏠" },
+  { name: "Billing", href: "/account/subscription", icon: "💳" },
+  { name: "Presentation Grader", href: "/presentation-grader", icon: "🎤" },
+  { name: "Student Practice", href: "/practice", icon: "🎧" },
   { name: "Students", href: "/students", icon: "👩‍🎓" },
   { name: "Classes", href: "/classes", icon: "🏫" },
   { name: "Assessments", href: "/assessments", icon: "🎤" },
