@@ -32,6 +32,7 @@ yarn-error.log*
 
 # local database dumps and backups
 *.sql
+!prisma/migrations/**/migration.sql
 oraliq-before-*.sql
 backups/
 

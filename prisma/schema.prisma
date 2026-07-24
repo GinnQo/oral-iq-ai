@@ -86,12 +86,11 @@ model User {
   classrooms        Classroom[]
   students          Student[]
   assessmentResults AssessmentResult[]
-  createdSchools    School[]      @relation("SchoolCreatedBy")
-  school            School?       @relation("SchoolMembers", fields: [schoolId], references: [id], onDelete: SetNull)
-  subscription     Subscription? @relation("UserSubscription")
+  createdSchools    School[]           @relation("SchoolCreatedBy")
+  school            School?            @relation("SchoolMembers", fields: [schoolId], references: [id], onDelete: SetNull)
+  subscription      Subscription?      @relation("UserSubscription")
 
   @@index([schoolId])
-
   @@map("users")
 }
 
@@ -99,13 +98,13 @@ model School {
   id               String   @id @default(cuid())
   name             String
   billingEmail     String?
-  createdByUserId   String?
-  stripeCustomerId  String?  @unique
+  createdByUserId  String?
+  stripeCustomerId String?  @unique
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  createdBy   User?          @relation("SchoolCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  members     User[]         @relation("SchoolMembers")
+  createdBy    User?         @relation("SchoolCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  members      User[]        @relation("SchoolMembers")
   subscription Subscription? @relation("SchoolSubscription")
 
   @@index([createdByUserId])
@@ -118,10 +117,10 @@ model Subscription {
   plan                    SubscriptionPlan
   status                  SubscriptionStatus
   customerType            CustomerType?
-  billingCadence          BillingCadence?    
+  billingCadence          BillingCadence?
   stripeCustomerId        String?            @unique
   stripeSubscriptionId    String?            @unique
-  stripeCheckoutSessionId  String?            @unique
+  stripeCheckoutSessionId String?            @unique
   stripePriceId           String?
   stripeProductId         String?
   billingEmail            String?
@@ -151,23 +150,31 @@ model Subscription {
 }
 
 model Assessment {
-  id            String           @id @default(cuid())
-  userId        String
-  title         String
-  activityType  String?
-  grade         String?
-  duration      String?
-  skillFocus    String?
-  rubric        String?
-  presenterType String?
-  status        AssessmentStatus @default(DRAFT)
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id                         String           @id @default(cuid())
+  userId                     String
+  title                      String
+  activityType               String?
+  grade                      String?
+  duration                   String?
+  skillFocus                 String?
+  rubric                     String?
+  presenterType              String?
+  classroomCourseId          String?
+  classroomCourseWorkId      String?
+  classroomCourseWorkTitle   String?
+  classroomAlternateLink     String?
+  classroomMaxPoints         Float?
+  classroomAssociationStatus String?
+  classroomLinkedAt          DateTime?
+  status                     AssessmentStatus @default(DRAFT)
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
 
   user    User               @relation(fields: [userId], references: [id], onDelete: Restrict)
   results AssessmentResult[]
 
   @@index([userId])
+  @@index([userId, classroomCourseId, classroomCourseWorkId])
   @@index([createdAt])
   @@index([status])
   @@map("assessments")
@@ -237,36 +244,46 @@ model ClassroomStudent {
 }
 
 model AssessmentResult {
-  id                String   @id @default(cuid())
-  userId            String
-  assessmentId      String?
-  presentationType  String
-  title             String?
-  grade             String?
-  rubric            String?
-  topic             String?
-  transcript        String
-  duration          Float
-  aiScore           Float?
-  teacherFinalScore Float?
-  teacherReviewNote String?
-  studentNames      Json
-  segments          Json
-  detectedSpeakers  Json
-  speakerMappings   Json
-  speakerStatistics Json
-  overlapWarnings   Json
-  warnings          Json
-  groupAssessment   Json
-  individualResults Json
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                     String    @id @default(cuid())
+  userId                 String
+  assessmentId           String?
+  classroomSubmissionId  String?
+  classroomUserId        String?
+  classroomDraftGrade    Float?
+  classroomAssignedGrade Float?
+  classroomSyncStatus    String?
+  classroomSyncedAt      DateTime?
+  classroomSyncError     String?
+  presentationType       String
+  title                  String?
+  grade                  String?
+  rubric                 String?
+  topic                  String?
+  transcript             String
+  duration               Float
+  aiScore                Float?
+  teacherFinalScore      Float?
+  teacherReviewNote      String?
+  studentNames           Json
+  segments               Json
+  detectedSpeakers       Json
+  speakerMappings        Json
+  speakerStatistics      Json
+  overlapWarnings        Json
+  warnings               Json
+  groupAssessment        Json
+  individualResults      Json
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
   assessment Assessment? @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([assessmentId])
+  @@index([assessmentId, classroomUserId])
+  @@index([classroomSubmissionId])
+  @@index([classroomSyncStatus])
   @@index([createdAt])
   @@index([teacherFinalScore])
   @@map("assessment_results")
