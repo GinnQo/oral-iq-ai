@@ -1,5 +1,8 @@
 import OpenAI from "openai";
+import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSubscriptionAccess } from "@/lib/subscription-access";
 
 import {
   CRITERION_LABELS,
@@ -116,6 +119,22 @@ function jsonError(
     },
     { status }
   );
+}
+
+async function requireAuthenticatedSubscription(): Promise<NextResponse | null> {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.email) {
+    return jsonError("request", 401, "Not authenticated.");
+  }
+
+  const access = await requireSubscriptionAccess();
+
+  if (!access?.canAccess) {
+    return jsonError("request", 403, "Subscription access is required.");
+  }
+
+  return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -922,6 +941,12 @@ function buildRequestContext(formData: FormData, audio: File): RequestContext {
 }
 
 export async function GET() {
+  const accessError = await requireAuthenticatedSubscription();
+
+  if (accessError) {
+    return accessError;
+  }
+
   const keyState = getServerOpenAIKey();
 
   return NextResponse.json({
@@ -936,6 +961,12 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const accessError = await requireAuthenticatedSubscription();
+
+  if (accessError) {
+    return accessError;
+  }
+
   const contentType = request.headers.get("content-type") ?? "";
 
   if (!contentType.toLowerCase().includes("multipart/form-data")) {

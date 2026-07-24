@@ -30,6 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# local database dumps and backups
+*.sql
+oraliq-before-*.sql
+backups/
+
 # env files (can opt-in for committing if needed)
 .env*
 
