@@ -1,6 +1,11 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/route";
-import { requireSubscriptionAccess } from "@/lib/subscription-access";
+import {
+  AuthorizationError,
+  requireTeacherSubscription,
+} from "@/lib/auth/authorization";
+import {
+  getGoogleAccessTokenForUser,
+  GoogleReconnectRequiredError,
+} from "@/lib/auth/google-tokens";
 
 type ClassroomProfile = {
   id?: string;
@@ -40,32 +45,8 @@ function jsonResponse(data: unknown, status = 200) {
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-
-    const accessToken = (
-      session as typeof session & {
-        accessToken?: string;
-      }
-    )?.accessToken;
-
-    if (!accessToken) {
-      return jsonResponse(
-        {
-          error:
-            "Not signed in with Google. Please sign out and sign in again.",
-        },
-        401
-      );
-    }
-
-    const access = await requireSubscriptionAccess();
-
-    if (!access?.canAccess) {
-      return jsonResponse(
-        { error: "Subscription required" },
-        402
-      );
-    }
+    const auth = await requireTeacherSubscription(402);
+    const token = await getGoogleAccessTokenForUser(auth.user.id);
 
     const { searchParams } = new URL(request.url);
     const courseId = searchParams.get("courseId")?.trim();
@@ -101,7 +82,7 @@ export async function GET(request: Request) {
       const response = await fetch(googleUrl.toString(), {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${token.accessToken}`,
           Accept: "application/json",
         },
         cache: "no-store",
@@ -133,15 +114,6 @@ export async function GET(request: Request) {
 
       nextPageToken = data.nextPageToken;
     } while (nextPageToken);
-
-    console.log(
-      "========================================"
-    );
-    console.log("RAW GOOGLE CLASSROOM STUDENTS");
-    console.log(JSON.stringify(allStudents, null, 2));
-    console.log(
-      "========================================"
-    );
 
     const students = allStudents
       .map((student) => {
@@ -222,9 +194,23 @@ export async function GET(request: Request) {
         students.length - studentsWithEmails,
     });
   } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return jsonResponse({ error: error.message }, error.status);
+    }
+
+    if (error instanceof GoogleReconnectRequiredError) {
+      return jsonResponse(
+        {
+          error:
+            "Not signed in with Google. Please sign out and sign in again.",
+        },
+        401
+      );
+    }
+
     console.error(
-      "[Classroom Students] Unexpected error:",
-      error
+      "[Classroom Students] Unexpected error",
+      { category: "classroom-students-failure" }
     );
 
     return jsonResponse(

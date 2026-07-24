@@ -1,6 +1,7 @@
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { requireSubscriptionAccess } from "@/lib/subscription-access";
+import {
+  AuthorizationError,
+  requireTeacherSubscription,
+} from "@/lib/auth/authorization";
 import fs from "fs/promises";
 import path from "path";
 
@@ -22,41 +23,35 @@ async function writeStore(obj: any) {
 }
 
 export async function GET(req: Request) {
-  const session: any = await getServerSession(authOptions as any);
-  const access = await requireSubscriptionAccess();
+  try {
+    const auth = await requireTeacherSubscription(402);
 
-  if (!access?.canAccess) {
-    return new Response(JSON.stringify({ error: "Subscription required" }), {
-      status: 402,
+    const store = await readStore();
+    const entry = store[auth.user.email] || null;
+
+    return new Response(JSON.stringify({ entry }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: error.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Server error" }), {
+      status: 500,
       headers: { "Content-Type": "application/json" },
     });
   }
-
-  const email = session?.user?.email || "anonymous";
-
-  const store = await readStore();
-  const entry = store[email] || null;
-
-  return new Response(JSON.stringify({ entry }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
 }
 
 export async function POST(req: Request) {
-  const session: any = await getServerSession(authOptions as any);
-  const access = await requireSubscriptionAccess();
-
-  if (!access?.canAccess) {
-    return new Response(JSON.stringify({ error: "Subscription required" }), {
-      status: 402,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  const email = session?.user?.email || "anonymous";
-
   try {
+    const auth = await requireTeacherSubscription(402);
+
     const body = await req.json();
     const { name, content } = body;
 
@@ -65,7 +60,7 @@ export async function POST(req: Request) {
     }
 
     const store = await readStore();
-    store[email] = {
+    store[auth.user.email] = {
       name,
       content,
       updatedAt: new Date().toISOString(),
@@ -75,6 +70,13 @@ export async function POST(req: Request) {
 
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e) {
+    if (e instanceof AuthorizationError) {
+      return new Response(JSON.stringify({ error: e.message }), {
+        status: e.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     console.error("Save rubric error", e);
     return new Response(JSON.stringify({ error: "Server error" }), { status: 500, headers: { "Content-Type": "application/json" } });
   }

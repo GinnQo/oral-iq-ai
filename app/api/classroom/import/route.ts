@@ -1,7 +1,8 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import prisma from "@/lib/prisma";
-import { requireSubscriptionAccess } from "@/lib/subscription-access";
+import {
+  AuthorizationError,
+  requireTeacherSubscription,
+} from "@/lib/auth/authorization";
 
 type ImportedCourse = {
   id: string;
@@ -32,32 +33,16 @@ function normalizeEmail(value?: string) {
 }
 
 async function getCurrentUser() {
-  const session = await getServerSession(authOptions);
+  const auth = await requireTeacherSubscription(402);
 
-  if (!session?.user?.email) {
-    return null;
-  }
-
-  const access = await requireSubscriptionAccess();
-
-  if (!access?.canAccess) {
-    return null;
-  }
-
-  const email = session.user.email.trim().toLowerCase();
-
-  return prisma.user.upsert({
+  return prisma.user.findUniqueOrThrow({
     where: {
-      email,
+      id: auth.user.id,
     },
-    update: {
-      name: session.user.name?.trim() || undefined,
-      image: session.user.image || undefined,
-    },
-    create: {
-      email,
-      name: session.user.name?.trim() || undefined,
-      image: session.user.image || undefined,
+    select: {
+      id: true,
+      email: true,
+      name: true,
     },
   });
 }
@@ -118,6 +103,10 @@ export async function GET() {
       students,
     });
   } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+
     console.error("[ClassroomImportGET] Error:", error);
 
     return Response.json(
@@ -355,6 +344,10 @@ export async function POST(request: Request) {
         students.length - studentsWithEmails,
     });
   } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+
     console.error("[ClassroomImportPOST] Error:", error);
 
     return Response.json(
@@ -410,6 +403,10 @@ export async function DELETE() {
 
     return Response.json({ success: true });
   } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+
     console.error("[ClassroomImportDELETE] Error:", error);
 
     return Response.json(

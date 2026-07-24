@@ -1,8 +1,9 @@
 import { Prisma } from "@prisma/client";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import prisma from "@/lib/prisma";
-import { requireSubscriptionAccess } from "@/lib/subscription-access";
+import {
+  AuthorizationError,
+  requireTeacherSubscription,
+} from "@/lib/auth/authorization";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -75,39 +76,12 @@ function toJsonValue(
 
 export async function GET() {
   try {
-    const session =
-      await getServerSession(authOptions);
-
-    if (!session?.user?.email) {
-      return Response.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
-
-    const access = await requireSubscriptionAccess();
-
-    if (!access?.canAccess) {
-      return Response.json(
-        { error: "Subscription required" },
-        { status: 402 }
-      );
-    }
-
-    const user = await prisma.user.findUnique({
-      where: {
-        email: session.user.email,
-      },
-    });
-
-    if (!user) {
-      return Response.json([]);
-    }
+    const auth = await requireTeacherSubscription(402);
 
     const results =
       await prisma.assessmentResult.findMany({
         where: {
-          userId: user.id,
+          userId: auth.user.id,
         },
         orderBy: {
           createdAt: "desc",
@@ -116,6 +90,13 @@ export async function GET() {
 
     return Response.json(results);
   } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return Response.json(
+        { error: error.message },
+        { status: error.status }
+      );
+    }
+
     console.error(
       "[AssessmentResultsGET] Error:",
       error
@@ -130,24 +111,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session =
-      await getServerSession(authOptions);
-
-    if (!session?.user?.email) {
-      return Response.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
-
-    const access = await requireSubscriptionAccess();
-
-    if (!access?.canAccess) {
-      return Response.json(
-        { error: "Subscription required" },
-        { status: 402 }
-      );
-    }
+    const auth = await requireTeacherSubscription(402);
 
     const body: unknown = await request.json();
 
@@ -210,21 +174,6 @@ export async function POST(request: Request) {
       groupAssessment.overallScore
     );
 
-    const user = await prisma.user.upsert({
-      where: {
-        email: session.user.email,
-      },
-      update: {
-        name: session.user.name ?? undefined,
-        image: session.user.image ?? undefined,
-      },
-      create: {
-        email: session.user.email,
-        name: session.user.name ?? undefined,
-        image: session.user.image ?? undefined,
-      },
-    });
-
     const assessmentId = readOptionalString(
       body.assessmentId
     );
@@ -234,7 +183,7 @@ export async function POST(request: Request) {
         await prisma.assessment.findFirst({
           where: {
             id: assessmentId,
-            userId: user.id,
+            userId: auth.user.id,
           },
           select: {
             id: true,
@@ -255,7 +204,7 @@ export async function POST(request: Request) {
     const result =
       await prisma.assessmentResult.create({
         data: {
-          userId: user.id,
+          userId: auth.user.id,
           assessmentId,
           presentationType,
           title:
@@ -313,7 +262,7 @@ export async function POST(request: Request) {
       });
 
     console.log(
-      `[AssessmentResultsPOST] Saved result ${result.id} for ${user.email}`
+      `[AssessmentResultsPOST] Saved result ${result.id} for ${auth.user.email}`
     );
 
     return Response.json(
@@ -324,6 +273,13 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return Response.json(
+        { error: error.message },
+        { status: error.status }
+      );
+    }
+
     console.error(
       "[AssessmentResultsPOST] Error:",
       error

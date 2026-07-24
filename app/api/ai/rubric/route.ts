@@ -1,37 +1,26 @@
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { requireSubscriptionAccess } from "@/lib/subscription-access";
+import {
+  AuthorizationError,
+  requireTeacherSubscription,
+} from "@/lib/auth/authorization";
+import {
+  getGoogleAccessTokenForUser,
+  GoogleReconnectRequiredError,
+} from "@/lib/auth/google-tokens";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const fileId = url.searchParams.get("fileId");
 
-  const session: any = await getServerSession(authOptions as any);
-  const accessToken: string | undefined = session?.accessToken;
-
-  if (!accessToken) {
-    return new Response(JSON.stringify({ error: "Not authenticated" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  const access = await requireSubscriptionAccess();
-
-  if (!access?.canAccess) {
-    return new Response(JSON.stringify({ error: "Subscription required" }), {
-      status: 402,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
   try {
+    const auth = await requireTeacherSubscription(402);
+    const token = await getGoogleAccessTokenForUser(auth.user.id);
+
     if (fileId) {
       // Try exporting Google Docs as plain text
       const exportRes = await fetch(
         `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text/plain`,
         {
-          headers: { Authorization: `Bearer ${accessToken}` },
+          headers: { Authorization: `Bearer ${token.accessToken}` },
         }
       );
 
@@ -47,7 +36,7 @@ export async function GET(req: Request) {
       const mediaRes = await fetch(
         `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`,
         {
-          headers: { Authorization: `Bearer ${accessToken}` },
+          headers: { Authorization: `Bearer ${token.accessToken}` },
         }
       );
 
@@ -71,7 +60,7 @@ export async function GET(req: Request) {
     const listRes = await fetch(
       `https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=50&fields=files(id,name,mimeType,owners)&spaces=drive`,
       {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: { Authorization: `Bearer ${token.accessToken}` },
       }
     );
 
@@ -87,7 +76,24 @@ export async function GET(req: Request) {
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("Rubric route error", e);
+    if (e instanceof AuthorizationError) {
+      return new Response(JSON.stringify({ error: e.message }), {
+        status: e.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (e instanceof GoogleReconnectRequiredError) {
+      return new Response(
+        JSON.stringify({ error: "Google authorization expired. Please sign out and sign in again." }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    console.error("Rubric route error", { category: "rubric-fetch-failure" });
     return new Response(JSON.stringify({ error: "Server error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },

@@ -3,7 +3,10 @@ import {
   NextRequest,
   NextResponse,
 } from "next/server";
-import { requireSubscriptionAccess } from "@/lib/subscription-access";
+import {
+  AuthorizationError,
+  requireTeacherSubscription,
+} from "@/lib/auth/authorization";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -2130,16 +2133,7 @@ export async function POST(
       );
     }
 
-    const access = await requireSubscriptionAccess();
-
-    if (!access?.canAccess) {
-      return NextResponse.json(
-        {
-          error: "Subscription required",
-        },
-        { status: 402 }
-      );
-    }
+    await requireTeacherSubscription(402);
 
     const contentType =
       request.headers.get(
@@ -2174,6 +2168,15 @@ export async function POST(
       { status: 415 }
     );
   } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+        },
+        { status: error.status }
+      );
+    }
+
     console.error(
       "Presentation assessment error:",
       error

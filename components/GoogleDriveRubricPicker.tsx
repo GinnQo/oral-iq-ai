@@ -1,7 +1,6 @@
 "use client";
 
 import Script from "next/script";
-import { useSession } from "next-auth/react";
 import { useCallback, useState } from "react";
 
 export type SelectedRubric = {
@@ -27,11 +26,6 @@ type PickerDocument = {
 type PickerResponse = {
   action?: string;
   docs?: PickerDocument[];
-};
-
-type AuthenticatedSession = {
-  accessToken?: string;
-  authError?: string;
 };
 
 declare global {
@@ -102,8 +96,6 @@ export default function GoogleDriveRubricPicker({
   onRubricSelected,
   onError,
 }: GoogleDriveRubricPickerProps) {
-  const { data: session } = useSession();
-
   const [pickerReady, setPickerReady] =
     useState(false);
 
@@ -137,13 +129,7 @@ export default function GoogleDriveRubricPicker({
     }, [onError]);
 
   const openPicker =
-    useCallback(() => {
-      const currentSession =
-        session as AuthenticatedSession | null;
-
-      const accessToken =
-        currentSession?.accessToken;
-
+    useCallback(async () => {
       const developerKey =
         process.env
           .NEXT_PUBLIC_GOOGLE_PICKER_API_KEY;
@@ -153,22 +139,6 @@ export default function GoogleDriveRubricPicker({
           .NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER;
 
       if (disabled || opening) {
-        return;
-      }
-
-      if (currentSession?.authError) {
-        onError(
-          "Your Google authorization has expired. Please sign out and sign in with Google again."
-        );
-
-        return;
-      }
-
-      if (!accessToken) {
-        onError(
-          "Please sign out and sign in with Google again before selecting a rubric."
-        );
-
         return;
       }
 
@@ -201,6 +171,28 @@ export default function GoogleDriveRubricPicker({
 
       try {
         setOpening(true);
+
+        const tokenResponse = await fetch(
+          "/api/auth/google-token",
+          {
+            cache: "no-store",
+          }
+        );
+
+        const tokenData = (await tokenResponse.json()) as {
+          accessToken?: string;
+          error?: string;
+          reconnectRequired?: boolean;
+        };
+
+        if (!tokenResponse.ok || !tokenData.accessToken) {
+          throw new Error(
+            tokenData.error ||
+              "Please sign out and sign in with Google again before selecting a rubric."
+          );
+        }
+
+        const accessToken = tokenData.accessToken;
 
         const googlePicker =
           window.google.picker;
@@ -321,7 +313,6 @@ export default function GoogleDriveRubricPicker({
       onRubricSelected,
       opening,
       pickerReady,
-      session,
     ]);
 
   return (

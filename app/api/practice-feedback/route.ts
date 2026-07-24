@@ -1,8 +1,11 @@
 import OpenAI from "openai";
-import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { requireSubscriptionAccess } from "@/lib/subscription-access";
+import {
+  AuthorizationError,
+  requireAnyRole,
+  requireAuthenticatedUser,
+  requireSubscription,
+} from "@/lib/auth/authorization";
 
 import {
   CRITERION_LABELS,
@@ -121,20 +124,26 @@ function jsonError(
   );
 }
 
-async function requireAuthenticatedSubscription(): Promise<NextResponse | null> {
-  const session = await getServerSession(authOptions);
+async function requirePracticeAccess(): Promise<NextResponse | null> {
+  try {
+    const auth = await requireAuthenticatedUser();
+    requireAnyRole(auth, [
+      "STUDENT",
+      "TEACHER",
+      "SCHOOL_ADMIN",
+      "SUPER_ADMIN",
+      "ADMIN",
+    ]);
+    await requireSubscription(auth, 402);
 
-  if (!session?.user?.email) {
-    return jsonError("request", 401, "Not authenticated.");
+    return null;
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return jsonError("request", error.status, error.message);
+    }
+
+    return jsonError("request", 500, "Authorization check failed.");
   }
-
-  const access = await requireSubscriptionAccess();
-
-  if (!access?.canAccess) {
-    return jsonError("request", 403, "Subscription access is required.");
-  }
-
-  return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -941,7 +950,7 @@ function buildRequestContext(formData: FormData, audio: File): RequestContext {
 }
 
 export async function GET() {
-  const accessError = await requireAuthenticatedSubscription();
+  const accessError = await requirePracticeAccess();
 
   if (accessError) {
     return accessError;
@@ -961,7 +970,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const accessError = await requireAuthenticatedSubscription();
+  const accessError = await requirePracticeAccess();
 
   if (accessError) {
     return accessError;

@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
 
 const PUBLIC_PATHS = [
   "/",
@@ -16,6 +15,15 @@ function isPublicPath(pathname: string) {
   );
 }
 
+function hasSessionCookie(request: NextRequest) {
+  return Boolean(
+    request.cookies.get("next-auth.session-token")?.value ||
+      request.cookies.get("__Secure-next-auth.session-token")?.value ||
+      request.cookies.get("authjs.session-token")?.value ||
+      request.cookies.get("__Secure-authjs.session-token")?.value
+  );
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
@@ -23,21 +31,22 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
+  const isAuthenticated = hasSessionCookie(request);
 
-  if ((pathname === "/login" || pathname.startsWith("/login/")) && token) {
+  if ((pathname === "/login" || pathname.startsWith("/login/")) && isAuthenticated) {
     const role = searchParams.get("role");
     const destination = role === "student" ? "/practice" : "/teacher";
 
     return NextResponse.redirect(new URL(destination, request.url));
   }
 
-  if (!token && !isPublicPath(pathname)) {
+  if (!isAuthenticated && !isPublicPath(pathname)) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("role", "teacher");
+    loginUrl.searchParams.set(
+      "callbackUrl",
+      `${pathname}${request.nextUrl.search}`
+    );
 
     return NextResponse.redirect(loginUrl);
   }

@@ -14,26 +14,26 @@ function LoginPageContent() {
     searchParams.get("role") === "student"
       ? "student"
       : "teacher";
-
   const isStudent = role === "student";
+  const callbackUrl =
+    searchParams.get("callbackUrl")?.trim() ||
+    (isStudent ? "/practice" : "/teacher");
 
   useEffect(() => {
     if (status === "authenticated") {
       localStorage.setItem("oraliq_portal_role", role);
 
       router.replace(
-        isStudent ? "/practice" : "/teacher"
+        callbackUrl
       );
     }
-  }, [status, role, router, isStudent]);
+  }, [status, role, router, callbackUrl]);
 
   async function handleGoogleSignIn() {
     localStorage.setItem("oraliq_portal_role", role);
 
     await signIn("google", {
-      callbackUrl: isStudent
-        ? "/practice"
-        : "/teacher",
+      callbackUrl,
     });
   }
 

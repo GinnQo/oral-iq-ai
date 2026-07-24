@@ -1,7 +1,10 @@
-import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { requireSubscriptionAccess } from "@/lib/subscription-access";
+import {
+  AuthorizationError,
+  requireAuthenticatedUser,
+  requireSubscription,
+  requireTeacher,
+} from "@/lib/auth/authorization";
 
 const SPEAKER_SERVICE_URL = process.env.SPEAKER_SERVICE_URL;
 const MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -235,19 +238,18 @@ async function handleProxy(req: NextRequest): Promise<NextResponse> {
   let userIdForLogs = "anonymous";
 
   if (policy.access === "protected") {
-    const session = await getServerSession(authOptions);
+    try {
+      const auth = await requireAuthenticatedUser();
+      requireTeacher(auth);
+      const billing = await requireSubscription(auth, 402);
+      userIdForLogs = billing.user.id;
+    } catch (error) {
+      if (error instanceof AuthorizationError) {
+        return jsonError(error.status, error.message);
+      }
 
-    if (!session?.user?.email) {
-      return jsonError(401, "Not authenticated.");
+      return jsonError(500, "Authorization failed.");
     }
-
-    const access = await requireSubscriptionAccess();
-
-    if (!access?.canAccess) {
-      return jsonError(403, "Subscription access is required.");
-    }
-
-    userIdForLogs = access.user.id;
 
     const uploadValidationError = await validateProtectedUpload(req, proxyPath);
 

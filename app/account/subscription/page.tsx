@@ -73,10 +73,29 @@ export default function SubscriptionPage() {
       }
     }
 
-    if (sessionStatus !== "loading") {
+    if (sessionStatus === "authenticated") {
       loadStatus();
     }
   }, [sessionStatus]);
+
+  if (sessionStatus === "unauthenticated") {
+    return (
+      <main className="min-h-screen bg-slate-100 px-6 py-10 md:px-10">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          <h1 className="text-3xl font-bold text-slate-950">Sign in to manage billing</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Billing settings are only available after you sign in to your teacher account.
+          </p>
+          <Link
+            href="/login?role=teacher"
+            className="mt-6 inline-flex rounded-xl bg-blue-900 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Go to login
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   async function startCheckout(plan: CheckoutPlan) {
     try {
@@ -100,7 +119,7 @@ export default function SubscriptionPage() {
       }
 
       if (data.url) {
-        window.location.href = data.url;
+        window.location.assign(data.url);
       }
     } catch (checkoutError) {
       setError(checkoutError instanceof Error ? checkoutError.message : "Unable to start checkout.");
@@ -178,7 +197,7 @@ export default function SubscriptionPage() {
       }
 
       if (data.url) {
-        window.location.href = data.url;
+        window.location.assign(data.url);
       }
     } catch (portalError) {
       setError(portalError instanceof Error ? portalError.message : "Unable to open customer portal.");

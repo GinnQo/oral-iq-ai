@@ -1,30 +1,52 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/route";
-import { requireSubscriptionAccess } from "@/lib/subscription-access";
+import {
+  AuthorizationError,
+  requireTeacherSubscription,
+} from "@/lib/auth/authorization";
+import {
+  getGoogleAccessTokenForUser,
+  GoogleReconnectRequiredError,
+} from "@/lib/auth/google-tokens";
 
 export async function GET() {
-  const session: any = await getServerSession(authOptions);
+  try {
+    const auth = await requireTeacherSubscription(402);
+    const token = await getGoogleAccessTokenForUser(auth.user.id);
 
-  if (!session?.accessToken) {
-    return Response.json({ error: "Not signed in" }, { status: 401 });
-  }
+    const response = await fetch(
+      "https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE",
+      {
+        headers: {
+          Authorization: `Bearer ${token.accessToken}`,
+          Accept: "application/json",
+        },
+        cache: "no-store",
+      }
+    );
 
-  const access = await requireSubscriptionAccess();
+    const data = await response.json();
 
-  if (!access?.canAccess) {
-    return Response.json({ error: "Subscription required" }, { status: 402 });
-  }
-
-  const response = await fetch(
-    "https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE",
-    {
+    return Response.json(data, {
+      status: response.status,
       headers: {
-        Authorization: `Bearer ${session.accessToken}`,
+        "Cache-Control": "no-store",
       },
+    });
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return Response.json({ error: error.message }, { status: error.status });
     }
-  );
 
-  const data = await response.json();
+    if (error instanceof GoogleReconnectRequiredError) {
+      return Response.json(
+        { error: "Google authorization expired. Please sign out and sign in again." },
+        { status: 401 }
+      );
+    }
 
-  return Response.json(data);
+    console.error("[ClassroomCoursesGET] Error", {
+      category: "google-classroom-courses-failure",
+    });
+
+    return Response.json({ error: "Unable to load Google Classroom courses" }, { status: 500 });
+  }
 }

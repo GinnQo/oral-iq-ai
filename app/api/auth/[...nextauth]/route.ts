@@ -1,82 +1,30 @@
 import NextAuth, {
   type NextAuthOptions,
 } from "next-auth";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import GoogleProvider from "next-auth/providers/google";
+import prisma from "@/lib/prisma";
 
-type GoogleTokenResponse = {
-  access_token: string;
-  expires_in: number;
+type OAuthAccountLike = {
+  provider?: string;
+  providerAccountId?: string;
+  type?: string;
+  access_token?: string;
   refresh_token?: string;
-  scope?: string;
+  expires_at?: number;
   token_type?: string;
+  scope?: string;
+  id_token?: string;
+  session_state?: string;
 };
 
-async function refreshGoogleAccessToken(token: any) {
-  try {
-    if (!token.refreshToken) {
-      throw new Error(
-        "No Google refresh token is available. Please sign in again."
-      );
-    }
-
-    const response = await fetch(
-      "https://oauth2.googleapis.com/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          client_id:
-            process.env.GOOGLE_CLIENT_ID ?? "",
-          client_secret:
-            process.env.GOOGLE_CLIENT_SECRET ?? "",
-          grant_type: "refresh_token",
-          refresh_token: token.refreshToken,
-        }),
-      }
-    );
-
-    const refreshedTokens =
-      (await response.json()) as GoogleTokenResponse & {
-        error?: string;
-        error_description?: string;
-      };
-
-    if (!response.ok) {
-      throw new Error(
-        refreshedTokens.error_description ??
-          refreshedTokens.error ??
-          "Google token refresh failed."
-      );
-    }
-
-    return {
-      ...token,
-      accessToken: refreshedTokens.access_token,
-      accessTokenExpires:
-        Date.now() +
-        refreshedTokens.expires_in * 1000,
-      refreshToken:
-        refreshedTokens.refresh_token ??
-        token.refreshToken,
-      error: undefined,
-    };
-  } catch (error) {
-    console.error(
-      "[NextAuth] Google token refresh failed:",
-      error
-    );
-
-    return {
-      ...token,
-      error: "RefreshAccessTokenError",
-    };
-  }
-}
-
 export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
+
+  session: {
+    strategy: "database",
+  },
+
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -101,44 +49,95 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    async jwt({ token, account }) {
-      if (account) {
-        return {
-          ...token,
-          accessToken: account.access_token,
-          accessTokenExpires:
-            typeof account.expires_at === "number"
-              ? account.expires_at * 1000
-              : Date.now() + 60 * 60 * 1000,
-          refreshToken:
-            account.refresh_token ??
-            (token as any).refreshToken,
-          error: undefined,
-        };
-      }
-
-      const accessTokenExpires =
-        typeof (token as any)
-          .accessTokenExpires === "number"
-          ? (token as any).accessTokenExpires
-          : 0;
+    async signIn({ user, account }) {
+      const oauth = account as OAuthAccountLike | null;
 
       if (
-        Date.now() <
-        accessTokenExpires - 60_000
+        !oauth ||
+        oauth.provider !== "google" ||
+        oauth.type !== "oauth" ||
+        !oauth.providerAccountId
       ) {
-        return token;
+        return true;
       }
 
-      return refreshGoogleAccessToken(token);
+      const email = user.email?.trim().toLowerCase();
+      const persistedUser = email
+        ? await prisma.user.findUnique({
+            where: { email },
+            select: { id: true },
+          })
+        : null;
+
+      // For first-time OAuth users, let PrismaAdapter create/link User + Account first.
+      if (!persistedUser) {
+        return true;
+      }
+
+      const existingAccount = await prisma.account.findUnique({
+        where: {
+          provider_providerAccountId: {
+            provider: "google",
+            providerAccountId: oauth.providerAccountId,
+          },
+        },
+      });
+
+      await prisma.account.upsert({
+        where: {
+          provider_providerAccountId: {
+            provider: "google",
+            providerAccountId: oauth.providerAccountId,
+          },
+        },
+        update: {
+          userId: persistedUser.id,
+          type: "oauth",
+          access_token: oauth.access_token ?? existingAccount?.access_token ?? undefined,
+          refresh_token: oauth.refresh_token ?? existingAccount?.refresh_token ?? undefined,
+          expires_at: oauth.expires_at ?? existingAccount?.expires_at ?? undefined,
+          token_type: oauth.token_type ?? existingAccount?.token_type ?? undefined,
+          scope: oauth.scope ?? existingAccount?.scope ?? undefined,
+          id_token: oauth.id_token ?? existingAccount?.id_token ?? undefined,
+          session_state: oauth.session_state ?? existingAccount?.session_state ?? undefined,
+        },
+        create: {
+          userId: persistedUser.id,
+          type: "oauth",
+          provider: "google",
+          providerAccountId: oauth.providerAccountId,
+          access_token: oauth.access_token,
+          refresh_token: oauth.refresh_token,
+          expires_at: oauth.expires_at,
+          token_type: oauth.token_type,
+          scope: oauth.scope,
+          id_token: oauth.id_token,
+          session_state: oauth.session_state,
+        },
+      });
+
+      await prisma.user.update({
+        where: { id: persistedUser.id },
+        data: {
+          googleAccountId: oauth.providerAccountId,
+        },
+      });
+
+      return true;
     },
 
-    async session({ session, token }) {
-      (session as any).accessToken =
-        (token as any).accessToken;
+    async session({ session, user }) {
+      if (session.user) {
+        (session.user as { id?: string; role?: string }).id = user.id;
 
-      (session as any).authError =
-        (token as any).error;
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { role: true },
+        });
+
+        (session.user as { id?: string; role?: string }).role =
+          (dbUser?.role as string | undefined) ?? "TEACHER";
+      }
 
       return session;
     },

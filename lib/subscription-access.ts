@@ -1,6 +1,7 @@
 import { getServerSession, type Session } from "next-auth";
 import prisma from "@/lib/prisma";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { hasTeacherSubscriptionBypass } from "@/lib/auth/platform-access";
 import {
   SUBSCRIPTION_TRIAL_DAYS,
   getPlanConfig,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/subscription-plans";
 
 type SessionUser = Session["user"] & {
+  id?: string;
   googleAccountId?: string;
 };
 
@@ -50,9 +52,25 @@ export type ResolvedSubscriptionContext = {
 
 async function upsertUser(sessionUser: SessionUser) {
   const email = sessionUser.email?.trim().toLowerCase();
+  const id = sessionUser.id?.trim();
 
   if (!email) {
     throw new Error("Signed-in session is missing an email address.");
+  }
+
+  if (id) {
+    try {
+      return await prisma.user.update({
+        where: { id },
+        data: {
+          email,
+          name: sessionUser.name?.trim() || undefined,
+          image: sessionUser.image || undefined,
+        },
+      });
+    } catch {
+      // Fall through to email-based upsert for legacy sessions.
+    }
   }
 
   return prisma.user.upsert({
@@ -175,6 +193,7 @@ export async function getSessionUserWithBilling() {
   const subscription = school?.subscription ?? userSubscription ?? (await ensureTrialSubscription(user.id));
   const ownerType = subscriptionOwnerType(subscription);
   const active = isSubscriptionActiveLike(subscription.status, subscription.currentPeriodEnd ?? subscription.trialEndsAt);
+  const bypassAccess = hasTeacherSubscriptionBypass(user.email);
   const plan = resolvePlanKey(subscription.plan);
   const usageLimits = getPlanUsageLimits(plan);
 
@@ -205,7 +224,7 @@ export async function getSessionUserWithBilling() {
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
       ownerType,
     },
-    canAccess: active,
+    canAccess: active || bypassAccess,
     plan,
     usageLimits,
     ownerType,
